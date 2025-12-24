@@ -1,0 +1,165 @@
+#!/bin/bash
+
+# ===============================
+# COLOR DEFINITIONS
+# ===============================
+green="\e[38;5;82m"
+red="\e[38;5;196m"
+neutral="\e[0m"
+orange="\e[38;5;130m"
+blue="\e[38;5;39m"
+yellow="\e[38;5;226m"
+purple="\e[38;5;141m"
+bold_white="\e[1;37m"
+pink="\e[38;5;205m"
+reset="\e[0m"
+gray="\e[38;5;245m"
+
+# ===============================
+# RAINBOW TEXT FUNCTION
+# ===============================
+print_rainbow() {
+    local text="$1"
+    local length=${#text}
+    local start_color=(0 5 0)
+    local mid_color=(0 200 0)
+    local end_color=(0 5 0)
+
+    for ((i = 0; i < length; i++)); do
+        local progress=$((i * 100 / (length - 1)))
+        if [ "$progress" -lt 50 ]; then
+            local factor=$((progress * 2))
+            r=$(((start_color[0] * (100 - factor) + mid_color[0] * factor) / 100))
+            g=$(((start_color[1] * (100 - factor) + mid_color[1] * factor) / 100))
+            b=$(((start_color[2] * (100 - factor) + mid_color[2] * factor) / 100))
+        else
+            local factor=$(((progress - 50) * 2))
+            r=$(((mid_color[0] * (100 - factor) + end_color[0] * factor) / 100))
+            g=$(((mid_color[1] * (100 - factor) + end_color[1] * factor) / 100))
+            b=$(((mid_color[2] * (100 - factor) + end_color[2] * factor) / 100))
+        fi
+        printf "\e[38;2;%d;%d;%dm%s" "$r" "$g" "$b" "${text:$i:1}"
+    done
+    echo -e "$reset"
+}
+
+# ===============================
+# DIRECTORY SETUP
+# ===============================
+directories=(
+    /etc/xray
+    /etc/vmess
+    /etc/vless
+    /etc/trojan
+    /etc/shadowsocks
+    /usr/bin/xray
+    /var/log/xray
+    /var/www/html
+    /etc/haproxy
+    /etc/xray/vmess
+    /etc/xray/vless
+    /etc/xray/trojan
+    /etc/xray/shadowsocks
+    /etc/xray/ssh
+    /etc/xray/zivpn
+    /etc/zivpn
+    /etc/zivpn/api
+    /etc/zivpn/limit
+)
+
+for dir in "${directories[@]}"; do
+    [ ! -d "$dir" ] && mkdir -p "$dir"
+    chmod 777 "$dir"
+done
+
+clear
+
+# ===============================
+# DOMAIN SETUP
+# ===============================
+if [ -z "$1" ]; then
+    echo -e "${blue}┌─────────────────────────────────────────────────────┐${neutral}"
+    echo -e "${blue}│${neutral} ██████╗ ██╗   ██╗██████╗ ███████╗██████╗   ${blue}│"
+    echo -e "${blue}│${neutral} ██╔══██╗██║   ██║██╔══██╗██╔════╝██╔══██╗  ${blue}│"
+    echo -e "${blue}│${neutral} ██║  ██║██║   ██║██████╔╝█████╗  ██████╔╝  ${blue}│"
+    echo -e "${blue}│${neutral} ██║  ██║██║   ██║██╔══██╗██╔══╝  ██╔══██╗  ${blue}│"
+    echo -e "${blue}│${neutral} ██████╔╝╚██████╔╝██████╔╝███████╗██║  ██║  ${blue}│"
+    echo -e "${blue}│${neutral} ╚═════╝  ╚═════╝ ╚═════╝ ╚══════╝╚═╝  ╚═╝  ${blue}│"
+    echo -e "${blue}│${neutral} ${green}>> TUNNEL AUTOMATION SYSTEM <<${neutral}        ${blue}│"
+    echo -e "${blue}│${neutral} ${yellow}Copyright${reset} (C) ${gray}https://t.me/rahmarie${neutral}   ${blue}│"
+    echo -e "${blue}└─────────────────────────────────────────────────────┘${neutral}"
+    read -p "  Enter your domain ▶ " domain
+else
+    domain="$1"
+fi
+
+vps_ip=$(curl -s ipinfo.io/ip)
+domain_ip=$(getent ahosts "$domain" | awk '{print $1}' | head -n 1)
+
+if [ "$domain_ip" != "$vps_ip" ]; then
+    echo -e "${red}Domain tidak mengarah ke IP VPS${neutral}"
+    exit 1
+fi
+
+# ===============================
+# INSTALL DEPENDENCIES
+# ===============================
+echo -e "${green}Installing Golang...${neutral}"
+apt update -y && apt install golang -y
+
+# ===============================
+# ZIVPN SSL & CONFIG
+# ===============================
+openssl req -new -newkey rsa:4096 -days 365 -nodes -x509 \
+-subj "/C=ID/ST=Jawa Barat/L=Bandung/O=mudziboy/OU=IT/CN=$domain" \
+-keyout /etc/zivpn/zivpn.key \
+-out /etc/zivpn/zivpn.crt
+
+openssl rand -hex 16 > /etc/zivpn/apikey
+echo "8888" > /etc/zivpn/api_port
+
+wget -q https://raw.githubusercontent.com/mudziboy/ziv/main/config.json \
+-O /etc/zivpn/config.json
+
+wget -q https://github.com/zahidbd2/udp-zivpn/releases/download/udp-zivpn_1.4.9/udp-zivpn-linux-amd64 \
+-O /usr/local/bin/zivpn
+
+chmod +x /usr/local/bin/zivpn
+
+# ===============================
+# ZIVPN API BUILD (URUTAN YANG BENAR)
+# ===============================
+cd /etc/zivpn/api || exit
+wget -q https://raw.githubusercontent.com/mudziboy/ziv/main/zivpn-api.go
+wget -q https://raw.githubusercontent.com/mudziboy/ziv/main/go.mod
+
+# 1. Bersihkan dan Compile Dahulu
+rm -f go.mod go.sum zivpn-api 
+go mod init zivpn
+go mod tidy
+go build -o zivpn-api
+chmod +x zivpn-api
+
+# 2. Baru Daftarkan dan Jalankan Service
+cat <<EOF > /etc/systemd/system/zivpn-api.service
+[Unit]
+Description=ZiVPN API Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/etc/zivpn/api
+ExecStart=/etc/zivpn/api/zivpn-api
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable zivpn-api
+systemctl restart zivpn-api
+
+cd || exit
