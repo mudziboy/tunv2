@@ -1,0 +1,51 @@
+Tue Aug 27 20:57:42 2024 WARNING: Using --management on a TCP port WITHOUT passwords is STRONGLY discouraged and considered insecure
+Tue Aug 27 20:57:42 2024 WARNING: POTENTIALLY DANGEROUS OPTION --verify-client-cert none|optional (or --client-cert-not-required) may accept clients which do not present a certificate
+Tue Aug 27 20:57:42 2024 WARNING: file 'server.key' is group or others accessible
+Tue Aug 27 20:57:42 2024 OpenVPN 2.4.12 x86_64-pc-linux-gnu [SSL (OpenSSL)] [LZO] [LZ4] [EPOLL] [PKCS11] [MH/PKTINFO] [AEAD] built on Jun 27 2024
+Tue Aug 27 20:57:42 2024 library versions: OpenSSL 1.1.1f  31 Mar 2020, LZO 2.10
+Tue Aug 27 20:57:42 2024 MANAGEMENT: TCP Socket listening on [AF_INET]127.0.0.1:5555
+Tue Aug 27 20:57:43 2024 PLUGIN_INIT: POST /usr/lib/x86_64-linux-gnu/openvpn/plugins/openvpn-plugin-auth-pam.so '[/usr/lib/x86_64-linux-gnu/openvpn/plugins/openvpn-plugin-auth-pam.so] [login]' intercepted=PLUGIN_AUTH_USER_PASS_VERIFY 
+Tue Aug 27 20:57:43 2024 Diffie-Hellman initialized with 2048 bit key
+Tue Aug 27 20:57:43 2024 ******* WARNING *******: '--cipher none' was specified. This means NO encryption will be performed and tunnelled data WILL be transmitted in clear text over the network! PLEASE DO RECONSIDER THIS SETTING!
+Tue Aug 27 20:57:43 2024 ******* WARNING *******: '--auth none' was specified. This means no authentication will be performed on received packets, meaning you CANNOT trust that the data received by the remote side have NOT been manipulated. PLEASE DO RECONSIDER THIS SETTING!
+Tue Aug 27 20:57:43 2024 ROUTE_GATEWAY 128.199.192.1/255.255.192.0 IFACE=eth0 HWADDR=3e:72:51:e1:20:d3
+Tue Aug 27 20:57:43 2024 TUN/TAP device tun1 opened
+Tue Aug 27 20:57:43 2024 TUN/TAP TX queue length set to 100
+Tue Aug 27 20:57:43 2024 /sbin/ip link set dev tun1 up mtu 1500
+Tue Aug 27 20:57:43 2024 /sbin/ip addr add dev tun1 local 10.8.0.1 peer 10.8.0.2
+Tue Aug 27 20:57:43 2024 /sbin/ip route add 10.8.0.0/24 via 10.8.0.2
+Tue Aug 27 20:57:43 2024 Could not determine IPv4/IPv6 protocol. Using AF_INET
+Tue Aug 27 20:57:43 2024 Socket Buffers: R=[131072->131072] S=[16384->16384]
+Tue Aug 27 20:57:43 2024 Listening for incoming TCP connection on [AF_INET][undef]:1194
+Tue Aug 27 20:57:43 2024 Socket flags: TCP_NODELAY=1 succeeded
+Tue Aug 27 20:57:43 2024 TCPv4_SERVER link local (bound): [AF_INET][undef]:1194
+Tue Aug 27 20:57:43 2024 TCPv4_SERVER link remote: [AF_UNSPEC]
+Tue Aug 27 20:57:43 2024 GID set to nogroup
+Tue Aug 27 20:57:43 2024 UID set to nobody
+Tue Aug 27 20:57:43 2024 MULTI: multi_init called, r=256 v=256
+Tue Aug 27 20:57:43 2024 IFCONFIG POOL: base=10.8.0.4 size=62, ipv6=0
+Tue Aug 27 20:57:43 2024 IFCONFIG POOL LIST
+Tue Aug 27 20:57:43 2024 MULTI: TCP INIT maxclients=1024 maxevents=1028
+Tue Aug 27 20:57:43 2024 Initialization Sequence Completed
+Tue Aug 27 21:14:27 2024 TCP connection established with [AF_INET]127.0.0.1:40514
+Tue Aug 27 21:14:27 2024 Socket flags: TCP_NODELAY=1 succeeded
+Tue Aug 27 21:14:28 2024 127.0.0.1:40514 WARNING: Bad encapsulated packet length from peer (18245), which must be > 0 and <= 1627 -- please ensure that --tun-mtu or --link-mtu is equal on both peers -- this condition could also indicate a possible active attack on the TCP link -- [Attempting restart...]
+Tue Aug 27 21:14:28 2024 127.0.0.1:40514 Connection reset, restarting [0]
+Tue Aug 27 21:14:28 2024 127.0.0.1:40514 SIGUSR1[soft,connection-reset] received, client-instance restarting
+Tue Aug 27 22:04:20 2024 TCP connection established with [AF_INET]127.0.0.1:33316
+Tue Aug 27 22:04:20 2024 Socket flags: TCP_NODELAY=1 succeeded
+Tue Aug 27 22:04:30 2024 127.0.0.1:33316 Connection reset, restarting [0]
+Tue Aug 27 22:04:30 2024 127.0.0.1:33316 SIGUSR1[soft,connection-reset] received, client-instance restarting
+Tue Aug 27 22:04:52 2024 TCP connection established with [AF_INET]127.0.0.1:33548
+Tue Aug 27 22:04:52 2024 Socket flags: TCP_NODELAY=1 succeeded
+Tue Aug 27 22:05:02 2024 127.0.0.1:33548 Connection reset, restarting [0]
+Tue Aug 27 22:05:02 2024 127.0.0.1:33548 SIGUSR1[soft,connection-reset] received, client-instance restarting
+Tue Aug 27 22:05:12 2024 TCP connection established with [AF_INET]127.0.0.1:33696
+Tue Aug 27 22:05:12 2024 Socket flags: TCP_NODELAY=1 succeeded
+Tue Aug 27 22:05:12 2024 127.0.0.1:33696 WARNING: Bad encapsulated packet length from peer (0), which must be > 0 and <= 1627 -- please ensure that --tun-mtu or --link-mtu is equal on both peers -- this condition could also indicate a possible active attack on the TCP link -- [Attempting restart...]
+Tue Aug 27 22:05:12 2024 127.0.0.1:33696 Connection reset, restarting [0]
+Tue Aug 27 22:05:12 2024 127.0.0.1:33696 SIGUSR1[soft,connection-reset] received, client-instance restarting
+Tue Aug 27 22:05:13 2024 TCP connection established with [AF_INET]127.0.0.1:33702
+Tue Aug 27 22:05:13 2024 Socket flags: TCP_NODELAY=1 succeeded
+Tue Aug 27 22:05:23 2024 127.0.0.1:33702 Connection reset, restarting [0]
+Tue Aug 27 22:05:23 2024 127.0.0.1:33702 SIGUSR1[soft,connection-reset] received, client-instance restarting

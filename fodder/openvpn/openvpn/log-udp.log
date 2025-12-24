@@ -1,0 +1,25 @@
+Tue Aug 27 20:57:42 2024 WARNING: POTENTIALLY DANGEROUS OPTION --verify-client-cert none|optional (or --client-cert-not-required) may accept clients which do not present a certificate
+Tue Aug 27 20:57:42 2024 WARNING: file 'server.key' is group or others accessible
+Tue Aug 27 20:57:42 2024 OpenVPN 2.4.12 x86_64-pc-linux-gnu [SSL (OpenSSL)] [LZO] [LZ4] [EPOLL] [PKCS11] [MH/PKTINFO] [AEAD] built on Jun 27 2024
+Tue Aug 27 20:57:42 2024 library versions: OpenSSL 1.1.1f  31 Mar 2020, LZO 2.10
+Tue Aug 27 20:57:42 2024 PLUGIN_INIT: POST /usr/lib/x86_64-linux-gnu/openvpn/plugins/openvpn-plugin-auth-pam.so '[/usr/lib/x86_64-linux-gnu/openvpn/plugins/openvpn-plugin-auth-pam.so] [login]' intercepted=PLUGIN_AUTH_USER_PASS_VERIFY 
+Tue Aug 27 20:57:43 2024 Diffie-Hellman initialized with 2048 bit key
+Tue Aug 27 20:57:43 2024 ******* WARNING *******: '--cipher none' was specified. This means NO encryption will be performed and tunnelled data WILL be transmitted in clear text over the network! PLEASE DO RECONSIDER THIS SETTING!
+Tue Aug 27 20:57:43 2024 ******* WARNING *******: '--auth none' was specified. This means no authentication will be performed on received packets, meaning you CANNOT trust that the data received by the remote side have NOT been manipulated. PLEASE DO RECONSIDER THIS SETTING!
+Tue Aug 27 20:57:43 2024 ROUTE_GATEWAY 128.199.192.1/255.255.192.0 IFACE=eth0 HWADDR=3e:72:51:e1:20:d3
+Tue Aug 27 20:57:43 2024 TUN/TAP device tun0 opened
+Tue Aug 27 20:57:43 2024 TUN/TAP TX queue length set to 100
+Tue Aug 27 20:57:43 2024 /sbin/ip link set dev tun0 up mtu 1500
+Tue Aug 27 20:57:43 2024 /sbin/ip addr add dev tun0 local 20.8.0.1 peer 20.8.0.2
+Tue Aug 27 20:57:43 2024 /sbin/ip route add 20.8.0.0/24 via 20.8.0.2
+Tue Aug 27 20:57:43 2024 Could not determine IPv4/IPv6 protocol. Using AF_INET
+Tue Aug 27 20:57:43 2024 Socket Buffers: R=[212992->212992] S=[212992->212992]
+Tue Aug 27 20:57:43 2024 NOTE: setsockopt TCP_NODELAY=1 failed
+Tue Aug 27 20:57:43 2024 UDPv4 link local (bound): [AF_INET][undef]:2200
+Tue Aug 27 20:57:43 2024 UDPv4 link remote: [AF_UNSPEC]
+Tue Aug 27 20:57:43 2024 GID set to nogroup
+Tue Aug 27 20:57:43 2024 UID set to nobody
+Tue Aug 27 20:57:43 2024 MULTI: multi_init called, r=256 v=256
+Tue Aug 27 20:57:43 2024 IFCONFIG POOL: base=20.8.0.4 size=62, ipv6=0
+Tue Aug 27 20:57:43 2024 IFCONFIG POOL LIST
+Tue Aug 27 20:57:43 2024 Initialization Sequence Completed
