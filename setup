@@ -1,0 +1,170 @@
+#!/bin/bash
+
+# ===============================
+# COLOR DEFINITIONS
+# ===============================
+green="\e[38;5;82m"
+red="\e[38;5;196m"
+neutral="\e[0m"
+blue="\e[38;5;39m"
+
+# ===============================
+# PRE-INSTALLATION CLEANUP
+# ===============================
+# Menghentikan service lama agar tidak terjadi 'Text file busy' 
+systemctl stop zivpn zivpn-api zivpn-limit 2>/dev/null
+
+# ===============================
+# DIRECTORY SETUP
+# ===============================
+# Membuat folder sistem secara bersih [cite: 9, 10]
+directories=(
+    /etc/xray
+    /etc/xray/zivpn
+    /etc/zivpn
+    /etc/zivpn/api
+    /etc/zivpn/limit
+    /usr/bin
+    /var/log/zivpn
+)
+
+for dir in "${directories[@]}"; do
+    mkdir -p "$dir"
+    chmod 755 "$dir"
+done
+
+# Inisialisasi Database lokal [cite: 10]
+touch /etc/xray/zivpn/.zivpn.db
+chmod 644 /etc/xray/zivpn/.zivpn.db
+clear
+
+# ===============================
+# DOMAIN SETUP
+# ===============================
+if [ -z "$1" ]; then
+    echo -e "${blue}┌─────────────────────────────────────────────────────┐${neutral}"
+    echo -e "${blue}│${neutral}         >> TUNNEL AUTOMATION SYSTEM <<              ${blue}│"
+    echo -e "${blue}└─────────────────────────────────────────────────────┘${neutral}"
+    read -p "  Enter your domain ▶ " domain
+else
+    domain="$1"
+fi
+
+# ===============================
+# INSTALL DEPENDENCIES (CLEANED)
+# ===============================
+# Perbaikan Utama: Memastikan perintah apt bersih dari tag 
+echo -e "${green}Installing Golang & Dependencies...${neutral}"
+apt update -y
+apt install golang openssl iptables-persistent net-tools wget curl -y
+
+# ===============================
+# ZIVPN ENGINE & SSL SETUP
+# ===============================
+echo -e "${green}Setting up ZiVPN Engine and SSL...${neutral}"
+
+# Sertifikat SSL 
+openssl req -new -newkey rsa:4096 -days 365 -nodes -x509 \
+-subj "/C=ID/ST=JB/L=BDG/O=tunnel/OU=IT/CN=$domain" \
+-keyout /etc/zivpn/zivpn.key \
+-out /etc/zivpn/zivpn.crt
+
+# Setup Auth 
+[ ! -f "/etc/zivpn/apikey" ] && openssl rand -hex 16 > /etc/zivpn/apikey
+echo "8888" > /etc/zivpn/api_port
+
+# Download Engine 
+wget -q https://raw.githubusercontent.com/mudziboy/ziv/main/config.json -O /etc/zivpn/config.json
+wget -q https://github.com/zahidbd2/udp-zivpn/releases/download/udp-zivpn_1.4.9/udp-zivpn-linux-amd64 -O /usr/local/bin/zivpn
+chmod +x /usr/local/bin/zivpn
+
+# Registrasi Service Engine 
+cat <<EOF > /etc/systemd/system/zivpn.service
+[Unit]
+Description=ZIVPN UDP VPN Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/etc/zivpn
+ExecStart=/usr/local/bin/zivpn server -c /etc/zivpn/config.json
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# ===============================
+# ZIVPN API BUILD (STABILISASI PORT 8888)
+# ===============================
+# Alur ini diperbaiki agar binary pasti tercipta [cite: 14]
+echo -e "${green}Building ZiVPN API on Port 8888...${neutral}"
+cd /etc/zivpn/api || exit 
+
+# Mengambil source code API 
+wget -q -O zivpn-api.go https://raw.githubusercontent.com/mudziboy/ziv/main/zivpn-api.go
+
+# Proses Kompilasi Go [cite: 14]
+rm -f go.mod go.sum zivpn-api 
+go mod init zivpn
+go mod tidy
+go build -o zivpn-api zivpn-api.go
+chmod +x zivpn-api
+
+# Daftarkan Service API [cite: 14]
+cat <<EOF > /etc/systemd/system/zivpn-api.service
+[Unit]
+Description=ZiVPN API Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/etc/zivpn/api
+ExecStart=/etc/zivpn/api/zivpn-api
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Jalankan Layanan [cite: 14]
+systemctl daemon-reload
+systemctl enable zivpn zivpn-api
+systemctl restart zivpn zivpn-api
+
+# ===============================
+# IPTABLES NAT FORWARDING
+# ===============================
+echo -e "${green}Applying Iptables UDP Forwarding...${neutral}"
+iface=$(ip -4 route ls | grep default | grep -Po '(?<=dev )(\S+)' | head -1)
+iptables -t nat -I PREROUTING -i $iface -p udp --dport 6000:19999 -j DNAT --to-destination :5667
+netfilter-persistent save > /dev/null 2>&1
+
+# ===============================
+# ZIVPN LIMIT IP SERVICE
+# ===============================
+echo -e "${green}Automating Limit IP Service...${neutral}"
+
+cat <<EOF > /etc/systemd/system/zivpn-limit.service
+[Unit]
+Description=ZiVPN IP Limit Daemon
+After=network.target zivpn-api.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/limitipzivpn
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable zivpn-limit
+systemctl restart zivpn-limit
+
+cd || exit
+echo -e "${green}✅ Setup Selesai! Port 8888 Aktif.${neutral}"
+echo -e "${green}🔑 API Key: $(cat /etc/zivpn/apikey)${neutral}"
