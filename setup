@@ -1,0 +1,158 @@
+#!/bin/bash
+
+# ===============================
+# COLOR DEFINITIONS
+# ===============================
+green="\e[38;5;82m"
+red="\e[38;5;196m"
+neutral="\e[0m"
+blue="\e[38;5;39m"
+yellow="\e[38;5;226m"
+reset="\e[0m"
+
+# Create required directories
+directories=(
+    /etc/xray /etc/vmess /etc/vless /etc/trojan /etc/shadowsocks
+    /usr/bin/xray /var/log/xray /var/www/html /etc/haproxy
+    /etc/xray/vmess /etc/xray/vless /etc/xray/trojan /etc/xray/shadowsocks
+    /etc/xray/ssh /etc/zivpn /etc/zivpn/api
+)
+
+for dir in "${directories[@]}"; do
+    [ ! -d "$dir" ] && mkdir -p "$dir"
+    chmod 777 "$dir"
+done
+
+clear
+
+# Domain setup
+if [ -z "$1" ]; then
+    echo -e "${yellow}Masukkan domain Anda untuk memulai instalasi:${neutral}"
+    read -p "  Enter your domain: " domain
+else
+    domain="$1"
+fi
+
+# Simpan domain
+echo "$domain" >/etc/xray/domain
+vps_ip=$(curl -s ipinfo.io/ip)
+
+# ===============================
+# INSTALL DEPENDENCIES (FIXED)
+# ===============================
+# Menambahkan golang dan dos2unix ke daftar instalasi 
+packages=(
+    libnss3-dev liblzo2-dev libnspr4-dev pkg-config libpam0g-dev libcap-ng-dev
+    bc rsyslog dos2unix zlib1g-dev libssl-dev libsqlite3-dev build-essential
+    gcc g++ htop lsof tar wget curl zip unzip p7zip-full libc6 util-linux
+    ca-certificates iptables iptables-persistent netfilter-persistent
+    net-tools openssl gnupg2 socat xray jq cron golang-go
+)
+
+apt update -y
+for package in "${packages[@]}"; do
+    apt install -y "$package"
+done
+
+# ===============================
+# DOWNLOAD & EXTRACT PROJECT
+# ===============================
+echo -e "${green}Downloading and Extracting Project Files...${neutral}"
+cd /etc/menu || mkdir -p /etc/menu && cd /etc/menu
+url="https://github.com/mudziboy/tunv2/raw/main/project/project.zip"
+wget -O menu.zip "$url"
+7z e -pTunnelftdor menu.zip -o/usr/bin/ >/dev/null 2>&1
+
+# ===============================
+# DOS2UNIX ALL FILES (CRITICAL FIX)
+# ===============================
+# Memperbaiki semua format file di /usr/bin agar bisa dieksekusi 
+echo -e "${green}Applying dos2unix to all scripts...${neutral}"
+cd /usr/bin
+find . -type f -exec dos2unix {} \; >/dev/null 2>&1
+chmod +x *
+
+# ===============================
+# ZIVPN ENGINE & API SETUP
+# ===============================
+echo -e "${green}Building ZiVPN API and Engine...${neutral}"
+# Setup SSL for ZiVPN [cite: 226, 227]
+openssl req -new -newkey rsa:4096 -days 365 -nodes -x509 \
+-subj "/C=ID/ST=JB/L=BDG/O=tunnel/OU=IT/CN=$domain" \
+-keyout /etc/zivpn/zivpn.key -out /etc/zivpn/zivpn.crt
+
+# Download ZiVPN Engine Binary [cite: 75, 76]
+wget -q https://github.com/zahidbd2/udp-zivpn/releases/download/udp-zivpn_1.4.9/udp-zivpn-linux-amd64 -O /usr/local/bin/zivpn
+chmod +x /usr/local/bin/zivpn
+
+# Compile ZiVPN API Port 8888
+cd /etc/zivpn/api
+# Pastikan source code ada di folder API 
+[ -f /usr/bin/zivpn-api.go ] && mv /usr/bin/zivpn-api.go ./zivpn-api.go
+
+if [ -f "zivpn-api.go" ]; then
+    go mod init zivpn 2>/dev/null
+    go mod tidy 2>/dev/null
+    go build -o zivpn-api zivpn-api.go
+    chmod +x zivpn-api
+fi
+
+# Create Systemd Services [cite: 78, 235]
+cat <<EOF > /etc/systemd/system/zivpn.service
+[Unit]
+Description=ZIVPN UDP VPN Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/etc/zivpn
+ExecStart=/usr/local/bin/zivpn server -c /etc/zivpn/config.json
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+cat <<EOF > /etc/systemd/system/zivpn-api.service
+[Unit]
+Description=ZiVPN API Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/etc/zivpn/api
+ExecStart=/etc/zivpn/api/zivpn-api
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# API Key & Port Setup
+[ ! -f "/etc/zivpn/apikey" ] && openssl rand -hex 16 > /etc/zivpn/apikey
+echo "8888" > /etc/zivpn/api_port
+
+# ===============================
+# FIREWALL & FINALIZATION
+# ===============================
+interface=$(ip -4 route ls | grep default | grep -Po '(?<=dev )(\S+)' | head -1)
+iptables -t nat -I PREROUTING -i $interface -p udp --dport 6000:19999 -j DNAT --to-destination :5667 [cite: 80]
+netfilter-persistent save
+
+systemctl daemon-reload
+services=(
+    "zivpn.service" "zivpn-api.service" "nginx.service" 
+    "haproxy.service" "ssh.service" "dropbear.service"
+)
+
+for service in "${services[@]}"; do
+    systemctl enable $service
+    systemctl restart $service
+done
+
+echo -e "${green}INSTALLASI SELESAI!${neutral}"
+echo -e "API Key ZiVPN: $(cat /etc/zivpn/apikey)"
+read -p "Tekan enter untuk reboot server..."
+reboot
