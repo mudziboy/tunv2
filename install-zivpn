@@ -1,0 +1,369 @@
+#!/bin/bash
+
+# Define ANSI colors for output messages
+RED='\033[0;31m'
+NC='\033[0m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;93m'
+BLUE='\033[42m'
+CYAN='\033[0;36m'
+
+# Loading bar function
+loading_bar() {
+    local total=$1
+    local current=0
+    local width=50
+    local filled="▰"
+    local empty="▱"
+
+    while [ "$current" -le "$total" ]; do
+        local filled_count=$((current * width / total))
+        local empty_count=$((width - filled_count))
+
+        local bar=$(printf "%${filled_count}s" | tr ' ' "$filled")
+        bar+=$(printf "%${empty_count}s" | tr ' ' "$empty")
+
+        printf "\r${CYAN}[${bar}]${NC} %d%%" $((current * 100 / total))
+        sleep 0.05
+        ((current++))
+    done
+    printf "\n"
+}
+
+# ===============================
+# SC PROTECTION START
+# ===============================
+echo -e "${CYAN}Memeriksa lisensi script...${NC}"
+ipsaya=$(curl -sS ipv4.icanhazip.com)
+data_server=$(curl -v --insecure --silent https://google.com/ 2>&1 | grep Date | sed -e 's/< Date: //')
+date_list=$(date +"%Y-%m-%d" -d "$data_server")
+data_ip="https://raw.githubusercontent.com/mudziboy/regist/main/izin"
+checking_sc() {
+  useexp=$(wget -qO- $data_ip | grep $ipsaya | awk '{print $3}')
+  if [[ $date_list < $useexp ]]; then
+    echo -e "${GREEN}✓ Lisensi valid${NC}"
+  else
+    echo -e "${YELLOW}────────────────────────────────────────────${NC}"
+    echo -e "${BLUE}          404 NOT FOUND AUTOSCRIPT          ${NC}"
+    echo -e "${YELLOW}────────────────────────────────────────────${NC}"
+    echo -e ""
+    echo -e "            ${RED}PERMISSION DENIED !${NC}"
+    echo -e "   \033[0;33mYour VPS${NC} $ipsaya \033[0;33mHas been Banned${NC}"
+    echo -e "     \033[0;33mBuy access permissions for scripts${NC}"
+    echo -e "             \033[0;33mContact Admin :${NC}"
+    echo -e "      ${GREEN}WhatsApp${NC} wa.me/6283877140463"
+    echo -e "${YELLOW}────────────────────────────────────────────${NC}"
+    sleep 5
+    reboot
+  fi
+}
+checking_sc
+IFS=$'\n\t'
+
+INFO() { echo -e "${GREEN}[INFO]${NC} $*"; }
+WARN() { echo -e "${YELLOW}[WARN]${NC} $*"; }
+ERR() { echo -e "${RED}[ERR]${NC} $*"; }
+
+ZIVPN_VERSION="udp-zivpn_1.4.9"
+ZIVPN_DIR="/etc/zivpn"
+ZIVPN_BIN="/usr/local/bin/zivpn"
+ZIVPN_CFG="$ZIVPN_DIR/config.json"
+DOMAIN_FILE="/etc/xray/domain"
+
+# detect iface for iptables
+IPTABLES_IFACE="$(ip -4 route ls | awk '/default/ {for(i=1;i<=NF;i++){ if($i=="dev"){print $(i+1); exit}} }' | head -1 || true)"
+[ -z "$IPTABLES_IFACE" ] && IPTABLES_IFACE="eth0"
+
+# require root
+if [ "$(id -u)" -ne 0 ]; then
+  ERR "Please run as root"
+  exit 1
+fi
+
+clear
+echo -e "${CYAN}═══════════════════════════════════════════${NC}"
+echo -e "${GREEN}       ZIVPN VPN SERVER INSTALLER${NC}"
+echo -e "${CYAN}═══════════════════════════════════════════${NC}"
+echo ""
+
+# domain
+echo -e "${CYAN}➤ Mengecek konfigurasi domain...${NC}"
+loading_bar 20
+DOMAIN=""
+if [ -f "$DOMAIN_FILE" ]; then
+  DOMAIN="$(tr -d ' \t\n\r' < "$DOMAIN_FILE")"
+  INFO "Domain ditemukan: $DOMAIN"
+else
+  WARN "Domain tidak ditemukan - akan menggunakan self-signed certificate"
+fi
+
+# create dirs
+echo -e "${CYAN}➤ Membuat direktori konfigurasi...${NC}"
+loading_bar 15
+mkdir -p "$ZIVPN_DIR"
+chmod 755 "$ZIVPN_DIR" || true
+INFO "Direktori $ZIVPN_DIR siap"
+
+# create config
+echo -e "${CYAN}➤ Membuat file konfigurasi...${NC}"
+loading_bar 20
+if [ ! -f "$ZIVPN_CFG" ]; then
+  cat > "$ZIVPN_CFG" <<EOF
+{
+  "listen": ":5667",
+  "obfs": "zivpn",
+  "cert": "/etc/zivpn/zivpn.crt",
+  "key": "/etc/zivpn/zivpn.key",
+  "auth": {
+    "mode": "passwords",
+    "config": []
+  },
+  "members": []
+}
+EOF
+  INFO "Config.json berhasil dibuat"
+fi
+chmod 644 "$ZIVPN_CFG" || true
+chown root:root "$ZIVPN_CFG" || true
+
+# copy existing certs
+echo -e "${CYAN}➤ Menyiapkan sertifikat SSL/TLS...${NC}"
+loading_bar 25
+CERT_COPIED=0
+if [ -n "$DOMAIN" ]; then
+  if [ -f "/etc/xray/xray.crt" ] && [ -f "/etc/xray/xray.key" ]; then
+    cp -f /etc/xray/xray.crt "$ZIVPN_DIR/zivpn.crt"
+    cp -f /etc/xray/xray.key "$ZIVPN_DIR/zivpn.key"
+    CERT_COPIED=1
+    INFO "Sertifikat dari /etc/xray berhasil disalin"
+  fi
+  
+  if [ $CERT_COPIED -eq 0 ]; then
+    if [ -f "/root/.acme.sh/${DOMAIN}/fullchain.cer" ] && [ -f "/root/.acme.sh/${DOMAIN}/${DOMAIN}.key" ]; then
+      cp -f "/root/.acme.sh/${DOMAIN}/fullchain.cer" "$ZIVPN_DIR/zivpn.crt"
+      cp -f "/root/.acme.sh/${DOMAIN}/${DOMAIN}.key" "$ZIVPN_DIR/zivpn.key"
+      CERT_COPIED=1
+      INFO "Sertifikat dari acme.sh berhasil disalin"
+    elif [ -f "/root/.acme.sh/${DOMAIN}_ecc/fullchain.cer" ] && [ -f "/root/.acme.sh/${DOMAIN}_ecc/${DOMAIN}.key" ]; then
+      cp -f "/root/.acme.sh/${DOMAIN}_ecc/fullchain.cer" "$ZIVPN_DIR/zivpn.crt"
+      cp -f "/root/.acme.sh/${DOMAIN}_ecc/${DOMAIN}.key" "$ZIVPN_DIR/zivpn.key"
+      CERT_COPIED=1
+      INFO "Sertifikat ECC dari acme.sh berhasil disalin"
+    fi
+  fi
+fi
+
+if [ $CERT_COPIED -eq 1 ]; then
+  chmod 644 "$ZIVPN_DIR/zivpn.crt" || true
+  chmod 640 "$ZIVPN_DIR/zivpn.key" || true
+  chown root:root "$ZIVPN_DIR/zivpn.crt" "$ZIVPN_DIR/zivpn.key" || true
+else
+  WARN "Membuat self-signed certificate..."
+  openssl req -new -newkey rsa:2048 -days 365 -nodes -x509 \
+    -subj "/CN=${DOMAIN:-zivpn}" -keyout "$ZIVPN_DIR/zivpn.key" -out "$ZIVPN_DIR/zivpn.crt" >/dev/null 2>&1
+  chmod 640 "$ZIVPN_DIR/zivpn.key" || true
+  chmod 644 "$ZIVPN_DIR/zivpn.crt" || true
+  chown root:root "$ZIVPN_DIR/zivpn.key" "$ZIVPN_DIR/zivpn.crt" || true
+  INFO "Self-signed certificate berhasil dibuat"
+fi
+
+# download binary
+echo -e "${CYAN}➤ Mendeteksi arsitektur sistem...${NC}"
+loading_bar 15
+ARCH="$(uname -m)"
+case "$ARCH" in
+  x86_64) BNAME="udp-zivpn-linux-amd64" ;;
+  aarch64|arm64) BNAME="udp-zivpn-linux-arm64" ;;
+  armv7l|armv7) BNAME="udp-zivpn-linux-arm7" ;;
+  *) ERR "Arsitektur tidak didukung: $ARCH"; exit 1 ;;
+esac
+INFO "Arsitektur: $ARCH → Binary: $BNAME"
+
+URL="https://github.com/zahidbd2/udp-zivpn/releases/download/${ZIVPN_VERSION}/${BNAME}"
+TMPFILE="$(mktemp /tmp/zivpn.XXXXXX)"
+trap 'rm -f "$TMPFILE"' EXIT
+
+echo -e "${CYAN}➤ Mengunduh ZIVPN binary...${NC}"
+if ! wget -q -T 30 -O "$TMPFILE" "$URL" 2>/dev/null; then
+  ERR "Gagal mengunduh binary dari $URL"
+  exit 1
+fi
+loading_bar 30
+INFO "Binary berhasil diunduh"
+
+chmod +x "$TMPFILE"
+
+# install binary
+echo -e "${CYAN}➤ Menginstal binary...${NC}"
+if systemctl is-active --quiet zivpn.service 2>/dev/null; then
+  systemctl stop zivpn.service || true
+fi
+install -m 0755 "$TMPFILE" "$ZIVPN_BIN"
+rm -f "$TMPFILE"
+loading_bar 20
+INFO "Binary terinstal di $ZIVPN_BIN"
+
+# create systemd service
+echo -e "${CYAN}➤ Membuat systemd service...${NC}"
+loading_bar 20
+TLS_FLAGS=0
+if "$ZIVPN_BIN" --help 2>&1 | grep -qiE "tls|cert|key"; then TLS_FLAGS=1; fi
+
+cat >> /etc/sysctl.conf <<END
+net.core.default_qdisc=fq
+net.ipv4.tcp_congestion_control=bbr
+net.ipv4.ip_forward=1
+net.core.rmem_max=16777216
+net.core.wmem_max=16777216
+net.core.rmem_default=16777216
+net.core.wmem_default=16777216
+net.core.optmem_max=65536
+net.core.somaxconn=65535
+net.ipv4.tcp_rmem=4096 87380 16777216
+net.ipv4.tcp_wmem=4096 65536 16777216
+net.ipv4.tcp_fastopen=3
+fs.file-max=1000000
+net.core.netdev_max_backlog=16384
+net.ipv4.udp_mem=65536 131072 262144
+net.ipv4.udp_rmem_min=8192
+net.ipv4.udp_wmem_min=8192
+END
+sysctl -p &>/dev/null
+
+cat > /etc/systemd/system/zivpn.service <<EOF
+[Unit]
+Description=zivpn VPN Server
+Documentation=https://t.me/gerhanatunnel
+After=syslog.target network-online.target
+
+[Service]
+User=root
+NoNewPrivileges=true
+WorkingDirectory=${ZIVPN_DIR}
+EOF
+
+if [ "$TLS_FLAGS" -eq 1 ]; then
+  cat >> /etc/systemd/system/zivpn.service <<EOF
+ExecStart=${ZIVPN_BIN} server -c ${ZIVPN_CFG} --tls-cert ${ZIVPN_DIR}/zivpn.crt --tls-key ${ZIVPN_DIR}/zivpn.key
+EOF
+else
+  cat >> /etc/systemd/system/zivpn.service <<EOF
+ExecStart=${ZIVPN_BIN} server -c ${ZIVPN_CFG}
+EOF
+fi
+
+cat >> /etc/systemd/system/zivpn.service <<'EOF'
+Restart=on-failure
+Restart=always
+RestartSec=3
+LimitNOFILE=65535
+Environment=ZIVPN_LOG_LEVEL=info
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable zivpn.service >/dev/null 2>&1
+INFO "Systemd service berhasil dibuat"
+
+# start service
+echo -e "${CYAN}➤ Memulai service ZIVPN...${NC}"
+loading_bar 25
+systemctl restart zivpn.service || true
+sleep 2
+if systemctl is-active --quiet zivpn.service; then
+  INFO "Service ZIVPN berhasil berjalan"
+else
+  WARN "Service ZIVPN mungkin belum berjalan sempurna"
+fi
+
+# setup iptables
+echo -e "${CYAN}➤ Mengkonfigurasi firewall rules...${NC}"
+loading_bar 30
+while iptables -t nat -C PREROUTING -i "$IPTABLES_IFACE" -p udp --dport 6000:19999 -j DNAT --to-destination :5667 2>/dev/null; do
+  iptables -t nat -D PREROUTING -i "$IPTABLES_IFACE" -p udp --dport 6000:19999 -j DNAT --to-destination :5667
+done
+iptables -t nat -I PREROUTING 1 -i "$IPTABLES_IFACE" -p udp --dport 6000:19999 -j DNAT --to-destination :5667
+INFO "DNAT rule berhasil diterapkan"
+
+# ufw rules
+if command -v ufw >/dev/null 2>&1; then
+  ufw allow 6000:19999/udp >/dev/null 2>&1 || true
+  ufw allow 5667/udp >/dev/null 2>&1 || true
+  INFO "UFW rules berhasil ditambahkan"
+fi
+
+# persist iptables
+if command -v iptables-save >/dev/null 2>&1; then
+  if [ -d /etc/iptables ]; then
+    iptables-save > /etc/iptables/rules.v4 2>/dev/null || true
+  elif command -v netfilter-persistent >/dev/null 2>&1; then
+    iptables-save | netfilter-persistent save 2>/dev/null || true
+  fi
+fi
+
+# acme.sh hook
+if [ -n "$DOMAIN" ] && [ -d "/root/.acme.sh" ] && [ -f "/root/.acme.sh/acme.sh" ]; then
+  echo -e "${CYAN}➤ Mengatur auto-renewal certificate...${NC}"
+  loading_bar 15
+  HOOK="/root/.acme.sh/zivpn_deploy_hook.sh"
+  cat > "$HOOK" <<'EOS'
+#!/usr/bin/env bash
+domain="$1"
+cert="$3"
+key="$4"
+if [ -n "$domain" ] && [ -f "$cert" ] && [ -f "$key" ]; then
+  cp -f "$cert" /etc/zivpn/zivpn.crt
+  cp -f "$key"  /etc/zivpn/zivpn.key
+  chmod 644 /etc/zivpn/zivpn.crt
+  chmod 640 /etc/zivpn/zivpn.key
+  chown root:root /etc/zivpn/zivpn.crt /etc/zivpn/zivpn.key
+  systemctl restart zivpn.service || true
+fi
+EOS
+  chmod +x "$HOOK"
+  /root/.acme.sh/acme.sh --install-cert -d "$DOMAIN" --fullchainpath "/etc/zivpn/zivpn.crt" --keypath "/etc/zivpn/zivpn.key" --reloadcmd "systemctl restart zivpn.service" 2>/dev/null || true
+  INFO "Auto-renewal berhasil dikonfigurasi"
+fi
+
+echo -e "${CYAN}➤ Mengatur pembersihan otomatis akun expired...${NC}"
+loading_bar 10
+chmod +x /usr/bin/autokill-zivpn 2>/dev/null
+
+# Memasukkan ke cronjob (mencegah duplikasi dengan grep -v)
+(crontab -l 2>/dev/null | grep -v "/usr/bin/autokill-zivpn" ; echo "5 0 * * * /usr/bin/autokill-zivpn") | crontab -
+INFO "Cronjob auto-delete expired berhasil ditambahkan"
+
+
+# cleanup
+rm -f /root/zi.* 2>/dev/null || true
+
+echo ""
+echo -e "${GREEN}╔═══════════════════════════════════════════╗${NC}"
+echo -e "${GREEN}║                                           ║${NC}"
+echo -e "${GREEN}║     INSTALASI BERHASIL DISELESAIKAN!      ║${NC}"
+echo -e "${GREEN}║                                           ║${NC}"
+echo -e "${GREEN}╚═══════════════════════════════════════════╝${NC}"
+echo ""
+
+echo -e "${CYAN}╭─────────────────────────────────────────╮${NC}"
+echo -e "${CYAN}│           PERINTAH BERGUNA              │${NC}"
+echo -e "${CYAN}╰─────────────────────────────────────────╯${NC}"
+echo ""
+echo -e "  ${YELLOW}Status Service:${NC}"
+echo -e "  $ systemctl status zivpn.service -l"
+echo ""
+echo -e "  ${YELLOW}Lihat Logs:${NC}"
+echo -e "  $ journalctl -u zivpn.service -n 200 --no-pager"
+echo ""
+echo -e "  ${YELLOW}Test Port:${NC}"
+echo -e "  $ ss -ulpn | grep 5667"
+echo ""
+
+echo -e "${GREEN}╔═══════════════════════════════════════════╗${NC}"
+echo -e "${GREEN}║  Instalasi selesai!                       ║${NC}"
+echo -e "${GREEN}║  Silakan tambahkan user untuk memulai.    ║${NC}"
+echo -e "${GREEN}╚═══════════════════════════════════════════╝${NC}"
