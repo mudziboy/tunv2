@@ -1,0 +1,84 @@
+#!/bin/bash
+# ============================================================
+#  MASTER UPDATE SCRIPT — PREMIUM LIMITED EDITION
+#  BRANDING : TUNNEL OFFICIAL
+# ============================================================
+
+# Warna Pemikat
+Green="\e[92;1m"
+RED="\033[31m"
+NC='\033[0m'
+OR='\033[1;93m'
+
+# Konfigurasi Repository
+REPO_URL="https://raw.githubusercontent.com/mudziboy/tunv2/main/project/project.zip"
+CONF_BASE="https://raw.githubusercontent.com/mudziboy/tunv2/main/config"
+IZIN_URL="https://raw.githubusercontent.com/mudziboy/regist/main/izin"
+ZIP_PASS="Tunnelftdor"
+
+echo -e "${Green}Memulai Proses Update Master...${NC}"
+
+# 1. Sinkronisasi Perizinan
+echo -e "${OR}Checking access permissions...${NC}"
+ipsaya=$(curl -sS ipv4.icanhazip.com)
+data=$(curl -sS $IZIN_URL)
+if echo "$data" | grep -q "$ipsaya"; then
+    echo -e "${Green}Akses Diterima!${NC}"
+else
+    echo -e "${RED}Akses Ditolak! VPS Anda tidak terdaftar.${NC}"
+    exit 1
+fi
+
+# 2. Persiapan Direktori
+mkdir -p /etc/xray/vmess /etc/xray/vless /etc/xray/trojan /etc/xray/shadowsocks /etc/zivpn /etc/menu
+
+# 3. Update Semua File Konfigurasi JSON [cite: 840-850]
+echo -e "${OR}Updating configuration files...${NC}"
+wget -q -O /etc/xray/vmess/config.json "${CONF_BASE}/vmess/config.json"
+wget -q -O /etc/xray/vless/config.json "${CONF_BASE}/vless/config.json"
+wget -q -O /etc/xray/trojan/config.json "${CONF_BASE}/trojan/config.json"
+wget -q -O /etc/xray/shadowsocks/config.json "${CONF_BASE}/shadowsocks/config.json"
+wget -q -O /etc/zivpn/config.json "${CONF_BASE}/zivpn/config.json"
+
+# 4. Download dan Ekstrak Project ZIP [cite: 845-855]
+echo -e "${OR}Downloading and extracting project.zip...${NC}"
+wget -q -O /tmp/project.zip "${REPO_URL}"
+unzip -o -P "$ZIP_PASS" /tmp/project.zip -d /etc/menu/
+
+# 5. Ekstrak File ZIP tambahan jika ada di dalam folder menu
+cd /etc/menu
+for zip_file in *.zip; do
+    if [ -f "$zip_file" ]; then
+        echo -e "${OR}Extracting nested zip: $zip_file...${NC}"
+        unzip -o -P "$ZIP_PASS" "$zip_file" -d /etc/menu/ 2>/dev/null
+        rm -f "$zip_file"
+    fi
+done
+
+# 6. DISTRIBUSI & FIX LINE ENDINGS (dos2unix manual) 
+echo -e "${OR}Fixing file formats and distributing binaries...${NC}"
+# Membersihkan karakter \r (CRLF) dari semua file sebelum dipindahkan
+find /etc/menu/ -type f -exec sed -i 's/\r$//' {} +
+
+# Pindahkan ke /usr/bin
+cp -f /etc/menu/* /usr/bin/ 2>/dev/null
+
+# 7. Sinkronisasi Summary Akun ZiVPN di Menu 
+sed -i "s/zi_c=.*/zi_c=\$(jq '.auth.config | length' \/etc\/zivpn\/config.json 2>\/dev\/null || echo \"0\")/g" /usr/bin/menu
+
+# 8. Pengaturan Izin Eksekusi 
+chmod +x /usr/bin/*
+chmod 644 /etc/zivpn/config.json
+chmod 644 /etc/xray/*/config.json
+
+# 9. Restart Layanan [cite: 865-875]
+echo -e "${Green}Restarting all services...${NC}"
+systemctl daemon-reload
+services=("nginx" "xray" "vmess@config" "vless@config" "trojan@config" "shadowsocks@config" "zivpn" "zivpn-api")
+for svc in "${services[@]}"; do
+    systemctl restart $svc >/dev/null 2>&1
+done
+
+echo -e "${Green}Update Selesai Sempurna! Karakter Windows telah dibersihkan.${NC}"
+rm -f /tmp/project.zip
+menu
