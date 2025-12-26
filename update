@@ -1,0 +1,75 @@
+#!/bin/bash
+# ============================================================
+#  MASTER UPDATE SCRIPT — TUNNEL OFFICIAL
+# ============================================================
+
+# Warna Pemikat
+Green="\e[92;1m"
+RED="\033[31m"
+NC='\033[0m'
+OR='\033[1;93m'
+
+# Konfigurasi Repository
+REPO_URL="https://raw.githubusercontent.com/mudziboy/tunv2/main/project/project.zip"
+CONF_BASE="https://raw.githubusercontent.com/mudziboy/tunv2/main/config"
+IZIN_URL="https://raw.githubusercontent.com/mudziboy/regist/main/izin"
+ZIP_PASS="Tunnelftdor"
+
+echo -e "${Green}Memulai Proses Update Master...${NC}"
+
+# 1. Sinkronisasi Perizinan (Pusat Izin)
+echo -e "${OR}Checking access permissions...${NC}"
+ipsaya=$(curl -sS ipv4.icanhazip.com)
+data=$(curl -sS $IZIN_URL)
+if echo "$data" | grep -q "$ipsaya"; then
+    echo -e "${Green}Akses Diterima!${NC}"
+else
+    echo -e "${RED}Akses Ditolak! VPS Anda tidak terdaftar.${NC}"
+    exit 1
+fi
+
+# 2. Persiapan Direktori Config
+mkdir -p /etc/xray/vmess /etc/xray/vless /etc/xray/trojan /etc/xray/shadowsocks /etc/zivpn
+
+# 3. Update Semua File Konfigurasi JSON
+echo -e "${OR}Updating configuration files...${NC}"
+wget -q -O /etc/xray/vmess/config.json "${CONF_BASE}/vmess/config.json"
+wget -q -O /etc/xray/vless/config.json "${CONF_BASE}/vless/config.json"
+wget -q -O /etc/xray/trojan/config.json "${CONF_BASE}/trojan/config.json"
+wget -q -O /etc/xray/shadowsocks/config.json "${CONF_BASE}/shadowsocks/config.json"
+wget -q -O /etc/zivpn/config.json "${CONF_BASE}/zivpn/config.json"
+
+# 4. Update File Manajemen dari project.zip
+echo -e "${OR}Downloading and extracting project.zip...${NC}"
+wget -q -O /tmp/project.zip "${REPO_URL}"
+unzip -o -P "$ZIP_PASS" /tmp/project.zip -d /etc/menu/
+cp -f /etc/menu/* /usr/bin/
+
+# 5. Sinkronisasi Ulang Akun ZiVPN (Summary Fix)
+# Pastikan file menu menggunakan jq untuk menghitung akun [cite: 54, 158]
+sed -i "s/zi_c=.*/zi_c=\$(jq '.auth.config | length' \/etc\/zivpn\/config.json 2>\/dev\/null || echo \"0\")/g" /usr/bin/menu
+
+# 6. Pengaturan Izin Eksekusi
+echo -e "${OR}Applying file permissions...${NC}"
+chmod +x /usr/bin/*
+chmod 644 /etc/zivpn/config.json
+
+# 7. Restart Seluruh Layanan
+echo -e "${Green}Restarting all services...${NC}"
+systemctl daemon-reload
+services=(
+    "nginx" "xray" "vmess@config" "vless@config" 
+    "trojan@config" "shadowsocks@config" "zivpn" "zivpn-api"
+)
+
+for svc in "${services[@]}"; do
+    systemctl restart $svc >/dev/null 2>&1
+    echo -e "  Restart $svc... ${Green}Done${NC}"
+done
+
+echo -e "${Green}=======================================${NC}"
+echo -e "       UPDATE SELESAI SEMPURNA         "
+echo -e "  Script & Config Sudah Update   "
+echo -e "${Green}=======================================${NC}"
+rm -f /tmp/project.zip
+menu
