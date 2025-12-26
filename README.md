@@ -5,4 +5,6 @@ sysctl -w net.ipv6.conf.all.disable_ipv6=1 && sysctl -w net.ipv6.conf.default.di
 ```
 untuk update script
 
-```wget -q -O /usr/bin/update "https://raw.githubusercontent.com/mudziboy/tunv2/main/update" && chmod +x /usr/bin/update && update```
+```
+wget -q -O /usr/bin/update "https://raw.githubusercontent.com/mudziboy/tunv2/main/update" && chmod +x /usr/bin/update && update
+```
