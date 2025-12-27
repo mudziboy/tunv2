@@ -1,0 +1,103 @@
+#!/bin/bash
+# ============================================================
+#  ULTIMATE UPDATE MASTER — TUNNEL OFFICIAL (RECONSTRUCTION)
+# ============================================================
+
+# Warna Output
+GR="\e[92;1m"
+RD="\033[31m"
+NC='\033[0m'
+YL='\033[1;93m'
+
+# Konfigurasi URL Baru (Sesuai Permintaan)
+CONF_URL="https://raw.githubusercontent.com/mudziboy/tunv2/main/config"
+PROJECT_URL="https://raw.githubusercontent.com/mudziboy/tunv2/main/project/project.zip"
+BOT_ZIP_URL="https://raw.githubusercontent.com/mudziboy/doldol/main/bot.zip"
+IZIN_URL="https://raw.githubusercontent.com/mudziboy/regist/main/izin"
+ZIP_PASS="Tunnelftdor"
+
+echo -e "${YL}Memulai rekonstruksi sistem dan sinkronisasi API...${NC}"
+
+# 1. Validasi Izin & Pengambilan Auth Key Otomatis
+ipsaya=$(curl -sS ipv4.icanhazip.com)
+data_izin=$(curl -sS "$IZIN_URL")
+if echo "$data_izin" | grep -q "$ipsaya"; then
+    auth_name=$(echo "$data_izin" | grep "$ipsaya" | awk '{print $2}')
+    [[ -z "$auth_name" ]] && auth_name="TUNNELOFFICIAL"
+    echo -e "${GR}Akses Diterima! Auth Key: $auth_name${NC}"
+    echo "$auth_name" > /root/.key
+else
+    echo -e "${RD}Akses Ditolak! VPS tidak terdaftar.${NC}"
+    exit 1
+fi
+
+# 2. Pembersihan & Persiapan Folder
+apt update && apt install unzip dos2unix golang -y
+mkdir -p /etc/xray/{vmess,vless,trojan,shadowsocks} /etc/zivpn /etc/api-server /var/log/xray
+chmod -R 755 /var/log/xray
+
+# 3. Update Konfigurasi Xray (Core Config)
+echo -e "${YL}Updating Xray core configurations...${NC}"
+protocols=("vmess" "vless" "trojan" "shadowsocks")
+for proto in "${protocols[@]}"; do
+    wget -q -O "/etc/xray/$proto/config.json" "${CONF_URL}/$proto/config.json"
+done
+
+# 4. Update Binari Manajemen (Project.zip)
+echo -e "${YL}Extracting project binaries...${NC}"
+wget -q -O /tmp/project.zip "${PROJECT_URL}"
+unzip -o -P "$ZIP_PASS" /tmp/project.zip -d /etc/menu/
+find /etc/menu/ -type f -exec dos2unix {} + 
+cp -f /etc/menu/* /usr/bin/
+chmod +x /usr/bin/*
+
+# 5. Deployment Master API (api.js - Port 5888)
+echo -e "${YL}Deploying Node.js Master API...${NC}"
+wget -q -O /etc/api-server/bot.zip "${BOT_ZIP_URL}"
+unzip -o /etc/api-server/bot.zip -d /etc/api-server/
+# Cari file api.js dan pastikan berada di root working directory
+find /etc/api-server -name "api.js" -exec cp {} /etc/api-server/ \;
+cd /etc/api-server && npm install express >/dev/null 2>&1
+
+# Perbaikan Port 5888 agar sinkron dengan Bot
+sed -i "s/const PORT = .*/const PORT = 5888;/g" /etc/api-server/api.js
+sed -i "s/app.listen(PORT/app.listen(PORT, '0.0.0.0'/g" /etc/api-server/api.js
+
+# 6. Deployment ZiVPN API (Port 8888)
+echo -e "${YL}Rebuilding ZiVPN API...${NC}"
+wget -q -O /etc/zivpn/api/zivpn-api.go "https://raw.githubusercontent.com/mudziboy/ziv/main/zivpn-api.go"
+cd /etc/zivpn/api && go build -o /usr/bin/zivpn-api zivpn-api.go
+chmod +x /usr/bin/zivpn-api
+
+# 7. Pembuatan Service api-server
+cat > /etc/systemd/system/api-server.service <<EOF
+[Unit]
+Description=Master VPN API Server (Node.js)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/etc/api-server
+ExecStart=/usr/bin/node api.js
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# 8. Firewall & Cleanup
+iptables -I INPUT -p tcp --dport 5888 -j ACCEPT
+iptables -I INPUT -p tcp --dport 8888 -j ACCEPT
+iptables-save > /etc/iptables/rules.v4
+
+# 9. Final Restart
+echo -e "${GR}Finalizing and restarting services...${NC}"
+systemctl daemon-reload
+systemctl enable api-server
+systemctl restart api-server xray zivpn zivpn-api
+
+echo -e "${GR}VPS UPDATED SUCCESSFULLY!${NC}"
+echo -e "${YL}API Master Running on Port 5888${NC}"
+echo -e "${YL}Auth Key Synced: $auth_name${NC}"
+rm -f /tmp/project.zip /etc/api-server/bot.zip
