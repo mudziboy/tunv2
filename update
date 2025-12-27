@@ -1,0 +1,112 @@
+#!/bin/bash
+# ============================================================
+#  MASTER UPDATE SCRIPT — TUNNEL OFFICIAL (PERBAIKAN TOTAL)
+#  PORT KONSISTEN: 8888 (ZIVPN & API.JS)
+# ============================================================
+
+# Warna
+Green="\e[92;1m"
+RED="\033[31m"
+NC='\033[0m'
+OR='\033[1;93m'
+
+# Konfigurasi Repository
+REPO_URL="https://raw.githubusercontent.com/mudziboy/tunv2/main/project/project.zip"
+CONF_BASE="https://raw.githubusercontent.com/mudziboy/tunv2/main/config"
+IZIN_URL="https://raw.githubusercontent.com/mudziboy/regist/main/izin"
+BOT_ZIP_URL="https://raw.githubusercontent.com/mudziboy/doldol/main/bot.zip"
+ZIP_PASS="Tunnelftdor"
+
+echo -e "${Green}Memulai Proses Update Master & API Deployment (Port 8888)...${NC}"
+
+# 1. Sinkronisasi Perizinan
+ipsaya=$(curl -sS ipv4.icanhazip.com)
+data=$(curl -sS $IZIN_URL)
+if echo "$data" | grep -q "$ipsaya"; then
+    echo -e "${Green}Akses Diterima!${NC}"
+else
+    echo -e "${RED}Akses Ditolak! VPS Anda tidak terdaftar.${NC}"
+    exit 1
+fi
+
+# 2. Persiapan Direktori
+mkdir -p /etc/xray/vmess /etc/xray/vless /etc/xray/trojan /etc/xray/shadowsocks /etc/zivpn /etc/menu /etc/api-server /etc/zivpn/api
+
+# 3. Update Konfigurasi ZiVPN
+wget -q -O /etc/zivpn/config.json "${CONF_BASE}/zivpn/config.json"
+
+# 4. Download dan Ekstrak Project ZIP (Binary Manajemen Terminal)
+echo -e "${OR}Downloading and extracting project.zip...${NC}"
+wget -q -O /tmp/project.zip "${REPO_URL}"
+unzip -o -P "$ZIP_PASS" /tmp/project.zip -d /etc/menu/
+
+# 5. Instalasi Golang & Kompilasi ZiVPN API (Go)
+echo -e "${OR}Setting up ZiVPN API (Golang)...${NC}"
+if ! command -v go &> /dev/null; then
+    apt update && apt install golang -y
+fi
+# Unduh source Go API terbaru
+wget -q -O /etc/zivpn/api/zivpn-api.go "https://raw.githubusercontent.com/mudziboy/ziv/main/zivpn-api.go"
+wget -q -O /etc/zivpn/api/go.mod "https://raw.githubusercontent.com/mudziboy/ziv/main/go.mod"
+cd /etc/zivpn/api && go build -o /usr/bin/zivpn-api zivpn-api.go
+chmod +x /usr/bin/zivpn-api
+
+# 6. Instalasi Master API (api.js dari bot.zip)
+echo -e "${OR}Installing api.js (Node.js) on Port 8888...${NC}"
+if ! command -v node &> /dev/null; then
+    apt update && apt install nodejs npm -y
+fi
+
+wget -q -O /etc/api-server/bot.zip "${BOT_ZIP_URL}"
+unzip -o /etc/api-server/bot.zip -d /etc/api-server/
+
+# FIX: Pastikan api.js berada di root folder /etc/api-server/
+find /etc/api-server -name "api.js" -exec cp {} /etc/api-server/ \;
+cd /etc/api-server && npm install express >/dev/null 2>&1
+
+# 7. Distribusi Binari & Perbaikan Format
+echo -e "${OR}Distributing binaries and fixing line endings...${NC}"
+find /etc/menu/ -type f -exec sed -i 's/\r$//' {} + 
+cp -f /etc/menu/* /usr/bin/ 2>/dev/null
+chmod +x /usr/bin/*
+
+# 8. Konfigurasi Khusus api.js (Port 8888 & Akses Publik)
+echo -e "${OR}Optimizing api.js Port to 8888...${NC}"
+sed -i 's/\r$//' /etc/api-server/api.js
+# Mengubah port ke 8888 secara otomatis di dalam kode jika belum berubah
+sed -i "s/const PORT = .*/const PORT = 8888;/g" /etc/api-server/api.js
+sed -i "s/app.listen(PORT/app.listen(PORT, '0.0.0.0'/g" /etc/api-server/api.js
+
+if [ ! -f /root/.key ]; then echo "TUNNELOFFICIAL" > /root/.key; fi
+
+# 9. Membuat Service API Server
+cat > /etc/systemd/system/api-server.service <<EOF
+[Unit]
+Description=Master VPN API Server (Node.js)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/etc/api-server
+ExecStart=/usr/bin/node api.js
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# 10. Firewall (Buka Port 8888)
+iptables -I INPUT -p tcp --dport 8888 -j ACCEPT
+mkdir -p /etc/iptables
+iptables-save > /etc/iptables/rules.v4
+
+# 11. Restart Semua Layanan
+echo -e "${Green}Restarting all services...${NC}"
+systemctl daemon-reload
+systemctl enable api-server zivpn-api
+systemctl restart api-server zivpn-api zivpn xray
+
+echo -e "${Green}Update Selesai! api.js dan ZiVPN API berjalan di Port 8888.${NC}"
+rm -f /tmp/project.zip /etc/api-server/bot.zip
+menu
