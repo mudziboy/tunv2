@@ -1,0 +1,193 @@
+#!/bin/bash
+# ============================================================
+#  ULTIMATE UPDATE MASTER — TUNNEL OFFICIAL (LIMITED EDITION)
+#  INTEGRATED WITH AUTO-ZIVPN & PREMIUM VISUALS
+# ============================================================
+
+# Warna Premium
+GR="\e[38;5;82m"
+RD="\e[38;5;196m"
+YL="\e[38;5;226m"
+CY="\e[38;5;51m"
+PR="\e[38;5;207m"
+WH="\e[97m"
+NC="\e[0m"
+
+# Fungsi Loading Bar Premium
+loading_bar() {
+    local total=$1; local current=0; local width=40
+    while [ "$current" -le "$total" ]; do
+        local filled=$((current * width / total))
+        local empty=$((width - filled))
+        local bar=$(printf "%${filled}s" | tr ' ' "▰")
+        bar+=$(printf "%${empty}s" | tr ' ' "▱")
+        printf "\r ${CY}[${bar}]${NC} ${WH}%d%%${NC}" $((current * 100 / total))
+        sleep 0.05; ((current++))
+    done
+    echo -e "\n"
+}
+
+# Fungsi Header Rainbow
+print_header() {
+    echo -e "${PR}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "          ${WH}PREMIUM UPDATE — TUNNEL OFFICIAL EDITION${NC}"
+    echo -e "${PR}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+}
+
+# Konfigurasi URL
+CONF_URL="https://raw.githubusercontent.com/mudziboy/tunv2/main/config"
+PROJECT_URL="https://raw.githubusercontent.com/mudziboy/tunv2/main/project/project.zip"
+BOT_ZIP_URL="https://raw.githubusercontent.com/mudziboy/doldol/main/bot.zip"
+IZIN_URL="https://raw.githubusercontent.com/mudziboy/regist/main/izin"
+SSL_ZIVPN_URL="https://raw.githubusercontent.com/mudziboy/lalier/main/ins-zivpn.sh"
+ZIP_PASS="Tunnelftdor"
+
+clear
+print_header
+
+# 1. Validasi Izin & Auth Key
+echo -e " ${CY}➤${NC} ${WH}Verifikasi Lisensi Cloud...${NC}"
+ipsaya=$(curl -sS ipv4.icanhazip.com)
+data_izin=$(curl -sS "$IZIN_URL")
+if echo "$data_izin" | grep -q "$ipsaya"; then
+    auth_name=$(echo "$data_izin" | grep "$ipsaya" | awk '{print $2}')
+    [[ -z "$auth_name" ]] && auth_name="TUNNELOFFICIAL"
+    echo "$auth_name" > /root/.key
+    loading_bar 20
+    echo -e " ${GR}✓ Access Granted: $auth_name${NC}"
+else
+    echo -e " ${RD}✗ Access Denied! IP Not Registered.${NC}"
+    exit 1
+fi
+
+# 2. Persiapan Folder & Dependencies
+echo -e "\n ${CY}➤${NC} ${WH}Mengoptimalkan Modul Sistem...${NC}"
+apt update -y && apt install unzip dos2unix golang jq -y >/dev/null 2>&1
+mkdir -p /etc/xray/{vmess,vless,trojan,shadowsocks} /etc/zivpn/api /etc/api-server /var/log/xray
+chmod -R 755 /var/log/xray
+loading_bar 15
+
+# 3. Update Konfigurasi Xray Core
+echo -e " ${CY}➤${NC} ${WH}Sinkronisasi Konfigurasi Xray...${NC}"
+protocols=("vmess" "vless" "trojan" "shadowsocks")
+for proto in "${protocols[@]}"; do
+    wget -q -O "/etc/xray/$proto/config.json" "${CONF_URL}/$proto/config.json"
+done
+loading_bar 25
+
+# 4. Update Binari Project
+echo -e " ${CY}➤${NC} ${WH}Mengekstrak Binari Management...${NC}"
+wget -q -O /tmp/project.zip "${PROJECT_URL}"
+unzip -o -P "$ZIP_PASS" /tmp/project.zip -d /etc/menu/ >/dev/null 2>&1
+find /etc/menu/ -type f -exec dos2unix {} + >/dev/null 2>&1
+cp -f /etc/menu/* /usr/bin/
+chmod +x /usr/bin/*
+loading_bar 30
+
+# 5. AUTO-FIX & REGENERATE ZIVPN SERVICES 
+echo -e " ${CY}➤${NC} ${WH}Membangun Ulang Service ZiVPN...${NC}"
+cat > /etc/systemd/system/zivpn.service <<EOF
+[Unit]
+Description=zivpn VPN Server
+After=network.target
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/etc/zivpn
+ExecStart=/usr/local/bin/zivpn server -c /etc/zivpn/config.json
+Restart=always
+RestartSec=3
+LimitNOFILE=65535
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
+[Install]
+WantedBy=multi-user.target
+EOF
+
+cat > /etc/systemd/system/zivpn-api.service <<EOF
+[Unit]
+Description=ZiVPN Golang API Service
+After=network.target zivpn.service
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/etc/zivpn/api
+ExecStart=/usr/bin/zivpn-api -port 8888
+Restart=always
+RestartSec=3
+[Install]
+WantedBy=multi-user.target
+EOF
+
+cat > /etc/systemd/system/api-server.service <<EOF
+[Unit]
+Description=Master VPN API Server (Node.js)
+After=network.target
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/etc/api-server
+ExecStart=/usr/bin/node api.js
+Restart=always
+[Install]
+WantedBy=multi-user.target
+EOF
+loading_bar 20
+
+# 6. OTOMATISASI ZIVPN SSL & MANAGER
+echo -e " ${CY}➤${NC} ${WH}Menginstal SSL ZiVPN secara Otomatis...${NC}"
+wget -q -O /usr/bin/zivpn-ins "$SSL_ZIVPN_URL"
+sed -i 's/\r$//' /usr/bin/zivpn-ins
+chmod +x /usr/bin/zivpn-ins
+# Jalankan installer SSL secara otomatis (tanpa interaksi) 
+/usr/bin/zivpn-ins >/dev/null 2>&1
+
+# Buat Sub-Menu Manager (Otomatis tanpa pilihan menu awal) 
+cat > /usr/bin/zivpn-manager <<'EOF'
+#!/bin/bash
+G="\e[38;5;82m"; R="\e[38;5;196m"; C="\e[38;5;51m"; W="\e[97m"; N="\e[0m"
+clear
+echo -e "${C}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${N}"
+echo -e "${G}       ZIVPN AUTOMATIC MANAGER              ${N}"
+echo -e "${C}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${N}"
+echo -e " ${G}Status:${N} Menjalankan pemeliharaan SSL..."
+zivpn-ins
+echo -e "${G}✓ Selesai.${N}"
+sleep 2
+menu
+EOF
+chmod +x /usr/bin/zivpn-manager
+loading_bar 35
+
+# 7. Deployment API Master & ZiVPN API
+echo -e " ${CY}➤${NC} ${WH}Mendeploy Master API Port 5888...${NC}"
+wget -q -O /etc/api-server/bot.zip "${BOT_ZIP_URL}"
+unzip -o /etc/api-server/bot.zip -d /etc/api-server/ >/dev/null 2>&1
+find /etc/api-server -name "api.js" -exec cp {} /etc/api-server/ \;
+cd /etc/api-server && npm install express >/dev/null 2>&1
+sed -i "s/const PORT = .*/const PORT = 5888;/g" /etc/api-server/api.js
+sed -i "s/app.listen(PORT/app.listen(PORT, '0.0.0.0'/g" /etc/api-server/api.js
+loading_bar 25
+
+echo -e " ${CY}➤${NC} ${WH}Membangun Ulang ZiVPN API Binary...${NC}"
+wget -q -O /etc/zivpn/api/zivpn-api.go "https://raw.githubusercontent.com/mudziboy/ziv/main/zivpn-api.go"
+cd /etc/zivpn/api && go build -o /usr/bin/zivpn-api zivpn-api.go >/dev/null 2>&1
+chmod +x /usr/bin/zivpn-api
+loading_bar 20
+
+# 8. Finalizing Services & Firewall
+echo -e " ${CY}➤${NC} ${WH}Menyelesaikan Konfigurasi Akhir...${NC}"
+iptables -I INPUT -p tcp --dport 5888 -j ACCEPT
+iptables -I INPUT -p tcp --dport 8888 -j ACCEPT
+iptables -I INPUT -p udp --dport 5667 -j ACCEPT
+iptables-save > /etc/iptables/rules.v4
+systemctl daemon-reload
+systemctl enable zivpn zivpn-api api-server >/dev/null 2>&1
+systemctl restart api-server xray zivpn zivpn-api >/dev/null 2>&1
+loading_bar 10
+
+echo -e "${PR}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e " ${GR}✓ VPS UPDATED & AUTO-FIXED SUCCESSFULLY!${NC}"
+echo -e " ${WH}Auth Key Synced :${NC} ${YL}$(cat /root/.key)${NC}"
+echo -e "${PR}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+rm -f /tmp/project.zip /etc/api-server/bot.zip
