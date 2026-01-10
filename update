@@ -1,0 +1,150 @@
+#!/bin/bash
+# ============================================================
+#  ULTIMATE UPDATE MASTER — TUNNEL OFFICIAL (LIMITED EDITION)
+#  FIXED: FORCE UPDATE api.js (STANDALONE)
+# ============================================================
+
+# Warna Premium
+GR="\e[38;5;82m"
+RD="\e[38;5;196m"
+YL="\e[38;5;226m"
+CY="\e[38;5;51m"
+PR="\e[38;5;207m"
+WH="\e[97m"
+NC="\e[0m"
+
+# Fungsi Loading Bar Premium
+loading_bar() {
+    local total=$1; local current=0; local width=40
+    while [ "$current" -le "$total" ]; do
+        local filled=$((current * width / total))
+        local empty=$((width - filled))
+        local bar=$(printf "%${filled}s" | tr ' ' "▰")
+        bar+=$(printf "%${empty}s" | tr ' ' "▱")
+        printf "\r ${CY}[${bar}]${NC} ${WH}%d%%${NC}" $((current * 100 / total))
+        sleep 0.05; ((current++))
+    done
+    echo -e "\n"
+}
+
+# Fungsi Header Rainbow
+print_header() {
+    echo -e "${PR}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "          ${WH}PREMIUM UPDATE — TUNNEL OFFICIAL EDITION${NC}"
+    echo -e "${PR}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+}
+
+# ============================
+# KONFIGURASI URL (FIXED)
+# ============================
+CONF_URL="https://raw.githubusercontent.com/mudziboy/tunv2/main/config"
+PROJECT_URL="https://raw.githubusercontent.com/mudziboy/tunv2/main/project/project.zip"
+API_JS_URL="https://raw.githubusercontent.com/mudziboy/doldol/main/api.js"
+IZIN_URL="https://raw.githubusercontent.com/mudziboy/regist/main/izin"
+SSL_ZIVPN_URL="https://raw.githubusercontent.com/mudziboy/lalier/main/ins-zivpn.sh"
+
+clear
+print_header
+
+# ============================================================
+# 1. VALIDASI IZIN & AUTH KEY
+# ============================================================
+echo -e " ${CY}➤${NC} ${WH}Verifikasi Lisensi Cloud...${NC}"
+ipsaya=$(curl -sS ipv4.icanhazip.com)
+data_izin=$(curl -sS "$IZIN_URL")
+
+if echo "$data_izin" | grep -q "$ipsaya"; then
+    auth_name=$(echo "$data_izin" | grep "$ipsaya" | awk '{print $2}')
+    [[ -z "$auth_name" ]] && auth_name="TUNNELOFFICIAL"
+    echo "$auth_name" > /root/.key
+    loading_bar 20
+    echo -e " ${GR}✓ Access Granted: $auth_name${NC}"
+else
+    echo -e " ${RD}✗ Access Denied! IP Not Registered.${NC}"
+    exit 1
+fi
+
+# ============================================================
+# 2. PERSIAPAN DEPENDENCY (TETAP)
+# ============================================================
+echo -e "\n ${CY}➤${NC} ${WH}Mengoptimalkan Modul Sistem...${NC}"
+apt update -y && apt install unzip dos2unix golang jq -y >/dev/null 2>&1
+mkdir -p /etc/xray/{vmess,vless,trojan,shadowsocks} /etc/zivpn/api /etc/api-server /var/log/xray
+chmod -R 755 /var/log/xray
+loading_bar 15
+
+# ============================================================
+# 3. UPDATE KONFIG XRAY (TETAP)
+# ============================================================
+echo -e " ${CY}➤${NC} ${WH}Sinkronisasi Konfigurasi Xray...${NC}"
+protocols=("vmess" "vless" "trojan" "shadowsocks")
+for proto in "${protocols[@]}"; do
+    wget -q -O "/etc/xray/$proto/config.json" "${CONF_URL}/$proto/config.json"
+done
+loading_bar 25
+
+# ============================================================
+# 4. UPDATE BINARI PROJECT (TETAP)
+# ============================================================
+echo -e " ${CY}➤${NC} ${WH}Mengekstrak Binari Management...${NC}"
+wget -q -O /tmp/project.zip "${PROJECT_URL}"
+unzip -o /tmp/project.zip -d /etc/menu/ >/dev/null 2>&1
+find /etc/menu/ -type f -exec dos2unix {} + >/dev/null 2>&1
+cp -f /etc/menu/* /usr/bin/
+chmod +x /usr/bin/*
+loading_bar 30
+
+# ============================================================
+# 5. FORCE UPDATE api.js (🔥 FIX UTAMA 🔥)
+# ============================================================
+echo -e " ${CY}➤${NC} ${WH}Memperbarui Master API (FORCE OVERRIDE)...${NC}"
+
+API_DIR="/etc/api-server"
+mkdir -p "$API_DIR"
+
+wget -q -O "$API_DIR/api.js" "$API_JS_URL"
+
+if [ ! -s "$API_DIR/api.js" ]; then
+    echo -e " ${RD}✗ Gagal mengunduh api.js (file kosong)${NC}"
+    exit 1
+fi
+
+chmod 644 "$API_DIR/api.js"
+
+# Paksa port & bind
+sed -i "s/const PORT = .*/const PORT = 5888;/g" "$API_DIR/api.js"
+sed -i "s/app.listen(PORT/app.listen(PORT, '0.0.0.0'/g" "$API_DIR/api.js"
+
+# Validasi endpoint ZIVPN (ANTI 404)
+if ! grep -q "createzivpn" "$API_DIR/api.js"; then
+    echo -e " ${RD}✗ ZIVPN endpoint tidak ditemukan di api.js!${NC}"
+    exit 1
+fi
+
+loading_bar 25
+
+# ============================================================
+# 6. INSTALL DEPENDENCY API (AMAN)
+# ============================================================
+cd "$API_DIR" && npm install express >/dev/null 2>&1
+
+# ============================================================
+# 7. FINALISASI SERVICE
+# ============================================================
+echo -e " ${CY}➤${NC} ${WH}Menyelesaikan Konfigurasi Akhir...${NC}"
+iptables -I INPUT -p tcp --dport 5888 -j ACCEPT
+iptables-save > /etc/iptables/rules.v4
+
+systemctl daemon-reload
+systemctl restart api-server >/dev/null 2>&1 || true
+loading_bar 10
+
+# ============================================================
+# DONE
+# ============================================================
+echo -e "${PR}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e " ${GR}✓ UPDATE BERHASIL — API.JS DIPAKSA OVERWRITE${NC}"
+echo -e " ${WH}Auth Key Aktif :${NC} ${YL}$(cat /root/.key)${NC}"
+echo -e "${PR}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+
+rm -f /tmp/project.zip
