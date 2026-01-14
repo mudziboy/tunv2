@@ -1,0 +1,71 @@
+#!/bin/bash
+# UPDATE MASTER - AUTO PERMISSION & CLEANUP
+
+# KONFIGURASI
+ZIP_URL="https://raw.githubusercontent.com/mudziboy/tunv2/main/project/project.zip"
+API_URL="https://raw.githubusercontent.com/mudziboy/doldol/main/api.js"
+ZIP_PASS="Tunnelftdor"
+
+TMP_DIR="/tmp/update_vps"
+EXTRACT_DIR="$TMP_DIR/extracted"
+API_PROD_DIR="/etc/zivpn"
+API_PROD_FILE="$API_PROD_DIR/api.js"
+
+# WARNA
+CY="\e[38;5;51m"; GR="\e[38;5;82m"; RD="\e[38;5;196m"; NC="\e[0m"
+
+clear
+echo -e "${CY}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "   UPDATE SYSTEM & AUTO-FIX BUG   "
+echo -e "${CY}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+
+# 1. SETUP FOLDER
+rm -rf "$TMP_DIR"
+mkdir -p "$EXTRACT_DIR"
+
+# 2. UPDATE SCRIPT VPS
+echo -e " ${CY}➤${NC} Mengunduh Scripts..."
+wget -q -O "$TMP_DIR/project.zip" "$ZIP_URL"
+
+if [ -s "$TMP_DIR/project.zip" ]; then
+    echo -e " ${CY}➤${NC} Mengekstrak..."
+    # Ekstrak ke folder transit
+    if unzip -P "$ZIP_PASS" -o -j "$TMP_DIR/project.zip" -d "$EXTRACT_DIR" >/dev/null 2>&1; then
+        
+        echo -e " ${CY}➤${NC} Mengatur Izin File..."
+        # Berikan izin eksekusi ke SEMUA file hasil ekstrak
+        chmod -R +x "$EXTRACT_DIR"/*
+        # Ubah format Windows ke Linux
+        find "$EXTRACT_DIR" -type f -exec dos2unix {} \; >/dev/null 2>&1
+        
+        # Pindahkan ke /usr/bin
+        mv -f "$EXTRACT_DIR"/* /usr/bin/
+        
+        echo -e " ${GR}✓ Script berhasil diperbarui.${NC}"
+    else
+        echo -e " ${RD}✗ Password ZIP salah atau file korup.${NC}"
+    fi
+else
+    echo -e " ${RD}✗ Gagal download project.zip${NC}"
+fi
+
+# 3. UPDATE API ZIVPN
+echo -e " ${CY}➤${NC} Update API Backend..."
+wget -q -O "$TMP_DIR/api.js" "$API_URL"
+if [ -s "$TMP_DIR/api.js" ] && grep -q "express" "$TMP_DIR/api.js"; then
+    cp "$TMP_DIR/api.js" "$API_PROD_FILE"
+    chmod 644 "$API_PROD_FILE"
+    systemctl restart zivpn
+    echo -e " ${GR}✓ API Backend Updated.${NC}"
+else
+    echo -e " ${RD}✗ API Backend gagal diunduh.${NC}"
+fi
+
+# 4. MEMBERSIHKAN LOG EXPIRED (Instan)
+echo -e " ${CY}➤${NC} Menjalankan Pembersihan Awal..."
+/usr/bin/exp >/dev/null 2>&1
+
+rm -rf "$TMP_DIR"
+echo -e "${CY}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e " ${GR}UPDATE SELESAI${NC}"
+echo -e "${CY}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
