@@ -102,10 +102,10 @@ if [ -s "$TMP_DIR/api.js" ] && grep -q "express" "$TMP_DIR/api.js"; then
     
     # Health Check internal
     sleep 2
-    if curl -s http://127.0.0.1:5888/health | grep -q "ok"; then
+    if curl -s http://127.0.0.1:5889/health | grep -q "ok"; then
         echo -e " ${GR}✓ API Backend Updated & Verified.${NC}"
     else
-        echo -e " ${YL}⚠ API Started, but port 5888 not responding.${NC}"
+        echo -e " ${YL}⚠ API Started, but port 5889 not responding.${NC}"
     fi
 else
     echo -e " ${RD}✗ API Backend gagal diunduh atau file tidak valid.${NC}"
